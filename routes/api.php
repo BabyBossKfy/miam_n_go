@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
     return response()->json([
-        'status' => 'franck ok',
+        'status' => 'ok',
         'app' => config('app.name'),
     ]);
 });
