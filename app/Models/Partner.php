@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Product;
+use App\Models\User;
 
 class Partner extends Model
 {
@@ -22,12 +23,19 @@ class Partner extends Model
         'deleted_by',
     ];
 
+    public function users()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'partner_users',
+            'id_partners',
+            'id_users'
+        );
+    }    
+    
     public function products()
     {
-        return $this->hasMany(
-            Product::class,
-            'id_partners',
-            'id_partners'
-        );
+        return $this->hasMany(Product::class, 'id_partners', 'id_partners');
     }
+
 }

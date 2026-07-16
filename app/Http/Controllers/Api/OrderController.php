@@ -13,42 +13,119 @@ use Illuminate\Support\Facades\DB;
 class OrderController extends Controller
 {
     /**
-     * Display a listing of orders.
+     * Liste des commandes selon le rôle.
+     * ADMIN    : voit toutes les commandes
+     * PARTNER  : voit les commandes contenant ses produits
+     * CUSTOMER : voit uniquement ses commandes
      */
-    public function index()
+    public function index(Request $request)
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+
+        if ($user->role === 'ADMIN') {
+            $orders = Order::with([
+                'customer.user',
+                'orderDetails.product.partner',
+                'payments',
+                'deliveries'
+            ])->get();
+
+        } elseif ($user->role === 'PARTNER') {
+            $partnerIds = $user->partners()
+                ->pluck('partners.id_partners')
+                ->toArray();
+
+            $orders = Order::with([
+                'customer.user',
+                'orderDetails.product.partner',
+                'payments',
+                'deliveries'
+            ])
+            ->whereHas('orderDetails.product', function ($query) use ($partnerIds) {
+                $query->whereIn('id_partners', $partnerIds);
+            })
+            ->get();
+
+        } else {
+            $customer = Customer::where('id_users', $user->id)->firstOrFail();
+
+            $orders = Order::with([
+                'customer.user',
+                'orderDetails.product.partner',
+                'payments',
+                'deliveries'
+            ])
+            ->where('id_customers', $customer->id_customers)
+            ->get();
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Liste des commandes récupérée avec succès',
-            'data' => Order::with([
-                'customer',
-                'orderDetails.product'
-            ])->get()
+            'data' => $orders
         ]);
     }
 
     /**
-     * Store a newly created order with order details.
+     * Création d'une commande.
+     * CUSTOMER : commande automatiquement liée au client connecté
+     * ADMIN    : peut créer pour un client donné via id_customers
+     * PARTNER  : non autorisé à créer une commande client
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'id_customers' => 'required|exists:customers,id_customers',
-            'products' => 'required|array|min:1',
-            'products.*.id_products' => 'required|exists:products,id_products',
-            'products.*.quantity' => 'required|integer|min:1',
-        ]);
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+
+        if ($user->role === 'PARTNER') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Un partenaire ne peut pas créer une commande client.'
+            ], 403);
+        }
+
+        if ($user->role === 'ADMIN') {
+            $request->validate([
+                'id_customers' => 'required|exists:customers,id_customers',
+                'products' => 'required|array|min:1',
+                'products.*.id_products' => 'required|exists:products,id_products',
+                'products.*.quantity' => 'required|integer|min:1',
+            ]);
+
+            $customer = Customer::findOrFail($request->id_customers);
+
+        } else {
+            $request->validate([
+                'products' => 'required|array|min:1',
+                'products.*.id_products' => 'required|exists:products,id_products',
+                'products.*.quantity' => 'required|integer|min:1',
+            ]);
+
+            $customer = Customer::where('id_users', $user->id)->firstOrFail();
+        }
 
         try {
             DB::beginTransaction();
-
-            $customer = Customer::findOrFail($request->id_customers);
 
             $totalOrderPrice = 0;
             $orderItems = [];
 
             foreach ($request->products as $item) {
                 $product = Product::findOrFail($item['id_products']);
+
                 $quantity = $item['quantity'];
                 $unitPrice = $product->price;
                 $totalPrice = $unitPrice * $quantity;
@@ -73,7 +150,7 @@ class OrderController extends Controller
                 'status_payment' => 'PENDING',
                 'state' => 'ACTIVE',
                 'id_customers' => $customer->id_customers,
-                'created_by' => $request->created_by ?? 'SYSTEM',
+                'created_by' => $user->email,
             ]);
 
             foreach ($orderItems as $item) {
@@ -87,15 +164,17 @@ class OrderController extends Controller
                     'status_delivery' => 'PENDING',
                     'status_payment' => 'PENDING',
                     'state' => 'ACTIVE',
-                    'created_by' => $request->created_by ?? 'SYSTEM',
+                    'created_by' => $user->email,
                 ]);
             }
 
             DB::commit();
 
             $order->load([
-                'customer',
-                'orderDetails.product'
+                'customer.user',
+                'orderDetails.product.partner',
+                'payments',
+                'deliveries'
             ]);
 
             return response()->json([
@@ -116,14 +195,67 @@ class OrderController extends Controller
     }
 
     /**
-     * Display the specified order.
+     * Afficher une commande selon le rôle.
      */
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+
         $order = Order::with([
-            'customer',
-            'orderDetails.product'
+            'customer.user',
+            'orderDetails.product.partner',
+            'payments',
+            'deliveries'
         ])->findOrFail($id);
+
+        if ($user->role === 'ADMIN') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Commande récupérée avec succès',
+                'data' => $order
+            ]);
+        }
+
+        if ($user->role === 'PARTNER') {
+            $partnerIds = $user->partners()
+                ->pluck('partners.id_partners')
+                ->toArray();
+
+            $hasPartnerProduct = $order->orderDetails
+                ->contains(function ($detail) use ($partnerIds) {
+                    return $detail->product
+                        && in_array((int) $detail->product->id_partners, $partnerIds);
+                });
+
+            if (!$hasPartnerProduct) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès interdit à cette commande.'
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Commande récupérée avec succès',
+                'data' => $order
+            ]);
+        }
+
+        $customer = Customer::where('id_users', $user->id)->firstOrFail();
+
+        if ((int) $order->id_customers !== (int) $customer->id_customers) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès interdit à cette commande.'
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -133,11 +265,64 @@ class OrderController extends Controller
     }
 
     /**
-     * Update the specified order.
+     * Mise à jour d'une commande.
+     * ADMIN    : peut tout modifier
+     * PARTNER  : peut modifier uniquement status_order sur ses commandes
+     * CUSTOMER : non autorisé à modifier directement
      */
     public function update(Request $request, string $id)
     {
-        $order = Order::findOrFail($id);
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+
+        $order = Order::with('orderDetails.product')->findOrFail($id);
+
+        if ($user->role === 'CUSTOMER') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Un client ne peut pas modifier directement une commande.'
+            ], 403);
+        }
+
+        if ($user->role === 'PARTNER') {
+            $partnerIds = $user->partners()
+                ->pluck('partners.id_partners')
+                ->toArray();
+
+            $hasPartnerProduct = $order->orderDetails
+                ->contains(function ($detail) use ($partnerIds) {
+                    return $detail->product
+                        && in_array((int) $detail->product->id_partners, $partnerIds);
+                });
+
+            if (!$hasPartnerProduct) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès interdit. Cette commande ne concerne pas votre partenaire.'
+                ], 403);
+            }
+
+            $request->validate([
+                'status_order' => 'sometimes|nullable|string|max:50',
+            ]);
+
+            $order->update([
+                'status_order' => $request->status_order ?? $order->status_order,
+                'updated_by' => $user->email,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Statut de commande mis à jour avec succès',
+                'data' => $order
+            ]);
+        }
 
         $request->validate([
             'status_order' => 'sometimes|nullable|string|max:50',
@@ -151,7 +336,7 @@ class OrderController extends Controller
             'status_delivery' => $request->status_delivery ?? $order->status_delivery,
             'status_payment' => $request->status_payment ?? $order->status_payment,
             'state' => $request->state ?? $order->state,
-            'updated_by' => $request->updated_by ?? 'SYSTEM',
+            'updated_by' => $user->email,
         ]);
 
         return response()->json([
@@ -162,14 +347,31 @@ class OrderController extends Controller
     }
 
     /**
-     * Remove the specified order.
+     * Suppression logique.
+     * ADMIN uniquement.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+
+        if ($user->role !== 'ADMIN') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Seul un administrateur peut supprimer une commande.'
+            ], 403);
+        }
+
         $order = Order::findOrFail($id);
 
         $order->update([
-            'deleted_by' => 'SYSTEM',
+            'deleted_by' => $user->email,
         ]);
 
         $order->delete();

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Customer;
+use App\Models\Partner;
 
 class User extends Authenticatable
 {
@@ -25,8 +26,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
-
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -54,4 +55,15 @@ class User extends Authenticatable
     {
         return $this->hasOne(Customer::class, 'id_users', 'id');
     }
+    
+    public function partners()
+    {
+        return $this->belongsToMany(
+            Partner::class,
+            'partner_users',
+            'id_users',
+            'id_partners'
+        );
+    }
+
 }
