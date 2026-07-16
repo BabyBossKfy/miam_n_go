@@ -10,6 +10,7 @@ class Customer extends Model
     use SoftDeletes;
 
     protected $table = 'customers';
+
     protected $primaryKey = 'id_customers';
 
     protected $fillable = [
@@ -22,4 +23,9 @@ class Customer extends Model
         'updated_by',
         'deleted_by',
     ];
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'id_customers', 'id_customers');
+    }
 }

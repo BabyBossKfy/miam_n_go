@@ -10,6 +10,7 @@ class Delivery extends Model
     use SoftDeletes;
 
     protected $table = 'delivery';
+
     protected $primaryKey = 'id_delivery';
 
     protected $fillable = [
@@ -22,4 +23,14 @@ class Delivery extends Model
         'updated_by',
         'deleted_by',
     ];
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'id_orders', 'id_orders');
+    }
+
+    public function deliveryDetails()
+    {
+        return $this->hasMany(DeliveryDetail::class, 'id_delivery', 'id_delivery');
+    }
 }

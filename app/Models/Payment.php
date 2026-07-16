@@ -10,12 +10,14 @@ class Payment extends Model
     use SoftDeletes;
 
     protected $table = 'payment';
+
     protected $primaryKey = 'id_payment';
 
     protected $fillable = [
         'reference',
         'transaction',
         'type',
+        'phone_payment',
         'token',
         'response',
         'status_transaction',
@@ -26,4 +28,9 @@ class Payment extends Model
         'updated_by',
         'deleted_by',
     ];
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'id_orders', 'id_orders');
+    }
 }
