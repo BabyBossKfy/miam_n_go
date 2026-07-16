@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\User;
+use App\Models\Order;
 
 class Customer extends Model
 {
@@ -14,6 +16,7 @@ class Customer extends Model
     protected $primaryKey = 'id_customers';
 
     protected $fillable = [
+        'id_users',
         'first_name_customers',
         'last_name_customers',
         'phone_customers',
@@ -23,6 +26,11 @@ class Customer extends Model
         'updated_by',
         'deleted_by',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'id_users', 'id');
+    }
 
     public function orders()
     {

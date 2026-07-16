@@ -53,7 +53,7 @@ class CustomerController extends Controller
      */
     public function show(string $id)
     {
-        $customer = Customer::with('orders')->findOrFail($id);
+        $customer = Customer::where('id_users', $request->user()->id)->firstOrFail();
 
         return response()->json([
             'success' => true,

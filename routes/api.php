@@ -9,6 +9,19 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\AuthController;
+
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/login', [AuthController::class, 'login']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    Route::apiResource('orders', OrderController::class);
+    Route::apiResource('payments', PaymentController::class);
+    Route::apiResource('deliveries', DeliveryController::class);
+});
+
 
 Route::apiResource('categories', CategoryController::class);
 Route::apiResource('partners', PartnerController::class);
