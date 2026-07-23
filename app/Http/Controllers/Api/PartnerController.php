@@ -32,7 +32,7 @@ class PartnerController extends Controller
         $partner = Partner::create([
             'label_partners' => $request->label_partners,
             'state' => $request->state ?? 'ACTIVE',
-            'created_by' => $request->created_by ?? 'SYSTEM',
+            'created_by' => $request->user()->email,
         ]);
 
         return response()->json([
@@ -63,10 +63,15 @@ class PartnerController extends Controller
     {
         $partner = Partner::findOrFail($id);
 
+        $request->validate([
+            'label_partners' => 'sometimes|required|string|max:250',
+            'state' => 'sometimes|nullable|string|max:50',
+        ]);
+
         $partner->update([
             'label_partners' => $request->label_partners ?? $partner->label_partners,
             'state' => $request->state ?? $partner->state,
-            'updated_by' => $request->updated_by ?? 'SYSTEM',
+            'updated_by' => $request->user()->email,
         ]);
 
         return response()->json([
@@ -79,9 +84,13 @@ class PartnerController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $partner = Partner::findOrFail($id);
+
+        $partner->update([
+            'deleted_by' => $request->user()->email,
+        ]);
 
         $partner->delete();
 
