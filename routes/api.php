@@ -100,6 +100,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('orders', OrderController::class);
     Route::apiResource('payments', PaymentController::class);
     Route::apiResource('deliveries', DeliveryController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Categories / Partners sécurisés
+    |--------------------------------------------------------------------------
+    | Lecture publique (voir plus haut).
+    | Écriture (store/update/destroy) réservée aux administrateurs.
+    |--------------------------------------------------------------------------
+    */
+
+    Route::middleware('role:ADMIN')->group(function () {
+        Route::apiResource('categories', CategoryController::class)->except([
+            'index',
+            'show'
+        ]);
+
+        Route::apiResource('partners', PartnerController::class)->except([
+            'index',
+            'show'
+        ]);
+    });
 });
 
 /*

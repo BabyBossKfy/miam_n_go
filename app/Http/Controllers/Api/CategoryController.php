@@ -26,7 +26,7 @@ class CategoryController extends Controller
         $category = Category::create([
             'label_category' => $request->label_category,
             'state' => $request->state ?? 'ACTIVE',
-            'created_by' => $request->created_by ?? 'SYSTEM',
+            'created_by' => $request->user()->email,
         ]);
 
         return response()->json([
@@ -59,7 +59,7 @@ class CategoryController extends Controller
         $category->update([
             'label_category' => $request->label_category ?? $category->label_category,
             'state' => $request->state ?? $category->state,
-            'updated_by' => $request->updated_by ?? 'SYSTEM',
+            'updated_by' => $request->user()->email,
         ]);
 
         return response()->json([
@@ -69,12 +69,12 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $category = Category::findOrFail($id);
 
         $category->update([
-            'deleted_by' => 'SYSTEM',
+            'deleted_by' => $request->user()->email,
         ]);
 
         $category->delete();
